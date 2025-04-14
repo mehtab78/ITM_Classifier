@@ -16,50 +16,61 @@ EPOCHS = 1
 MODEL_SAVE_PATH = "best_model.pth"
 
 
+from torch.utils.data import Dataset
+from PIL import Image
+import torch
+import os
+
+
 class ITM_Dataset(Dataset):
-    def __init__(self, txt_file, sentence_embeddings, transform=None):
-        self.data = []
+    def __init__(self, image_dir, itm_file, sentence_embeddings, mode, transform=None):
+        self.image_dir = image_dir
+        self.sentence_embeddings = sentence_embeddings
         self.transform = transform
-        with open(txt_file, "r") as f:
+        self.samples = []
+
+        with open(itm_file, "r") as f:
             for line in f:
                 parts = line.strip().split("\t")
-                if len(parts) < 3:
+                if len(parts) == 3:  # fallback if label is missing
+                    img_id, question, answer = parts
+                    label = "match"  # default assumption
+                elif len(parts) == 4:
+                    img_id, question, answer, label = parts
+                else:
                     continue
-                img_id, question, label = parts[0], parts[1], parts[-1]
-                self.data.append(
-                    (img_id, question, 1 if label.strip() == "match" else 0)
+
+                label = 1 if label.strip().lower() == "match" else 0
+                self.samples.append(
+                    (img_id.strip(), question.strip(), answer.strip(), label)
                 )
-        self.sentence_embeddings = sentence_embeddings
 
     def __len__(self):
-        return len(self.data)
+        return len(self.samples)
 
     def __getitem__(self, idx):
         while True:
             try:
                 img_id, question, answer, label = self.samples[idx]
-                key = f"{img_id}|{question.strip()}"
+                key = f"{img_id}|{question}"
 
-                # Check for missing embedding
                 if key not in self.sentence_embeddings:
                     raise KeyError(f"Missing embedding for: {key}")
 
-                # Get text embedding
                 text_embed = torch.tensor(
                     self.sentence_embeddings[key], dtype=torch.float
                 )
 
-                # Load image
                 image_path = os.path.join(self.image_dir, img_id)
                 image = Image.open(image_path).convert("RGB")
-                image = self.transform(image)
+                if self.transform:
+                    image = self.transform(image)
 
-                label = torch.tensor(int(label), dtype=torch.long)
-
+                label = torch.tensor(label, dtype=torch.long)
                 return image, text_embed, label
 
             except (KeyError, FileNotFoundError, OSError) as e:
-                print(f"⚠️ Skipping sample [{idx}]: {e}")
+                print(f"⚠️ Skipping bad sample: {e}")
                 idx = (idx + 1) % len(self.samples)
 
 

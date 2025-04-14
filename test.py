@@ -12,7 +12,7 @@ from tqdm import tqdm
 ARCHITECTURE = "ViT"  # or "CNN"
 PRETRAINED = True
 BATCH_SIZE = 32
-EPOCHS = 5
+EPOCHS = 1
 MODEL_SAVE_PATH = "best_model.pth"
 
 

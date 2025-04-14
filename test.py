@@ -35,17 +35,32 @@ class ITM_Dataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        img_id, question, label = self.data[idx]
-        img_path = f"dummy_images/{img_id}"  # not used, just placeholder
-        img = Image.new(
-            "RGB", (224, 224)
-        )  # dummy image since actual images aren't available
+        while True:
+            try:
+                img_id, question, answer, label = self.samples[idx]
+                key = f"{img_id}|{question.strip()}"
 
-        if self.transform:
-            img = self.transform(img)
+                # Check for missing embedding
+                if key not in self.sentence_embeddings:
+                    raise KeyError(f"Missing embedding for: {key}")
 
-        text_embed = torch.tensor(self.sentence_embeddings[img_id + "|" + question])
-        return img, text_embed, torch.tensor(label)
+                # Get text embedding
+                text_embed = torch.tensor(
+                    self.sentence_embeddings[key], dtype=torch.float
+                )
+
+                # Load image
+                image_path = os.path.join(self.image_dir, img_id)
+                image = Image.open(image_path).convert("RGB")
+                image = self.transform(image)
+
+                label = torch.tensor(int(label), dtype=torch.long)
+
+                return image, text_embed, label
+
+            except (KeyError, FileNotFoundError, OSError) as e:
+                print(f"⚠️ Skipping sample [{idx}]: {e}")
+                idx = (idx + 1) % len(self.samples)
 
 
 def load_sentence_embeddings(path):

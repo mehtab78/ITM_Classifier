@@ -60,7 +60,7 @@ if __name__ == "__main__":
 
     # Train the model
     train_model(
-        model, "CNN", train_loader, criterion, optimiser, num_epochs=20, device=device
+        model, "CNN", train_loader, criterion, optimiser, num_epochs=10, device=device
     )
 
     # Evaluate on test set

@@ -37,13 +37,13 @@ train_dataset = ITM_Dataset(
     data_split="train",
     train_ratio=0.2,
 )
-train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 
 print("LOADING test data")
 test_dataset = ITM_Dataset(
     IMAGES_PATH, test_data_file, sentence_embeddings, data_split="test"
 )
-test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
+test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
 # Create model using CNN architecture
 MODEL_ARCHITECTURE = "CNN"  # or "ViT"
@@ -77,7 +77,7 @@ train_model(
     train_loader,
     criterion,
     optimiser,
-    num_epochs=10,
+    num_epochs=1,
     device=device,
 )
 

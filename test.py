@@ -1,122 +1,155 @@
-import os
 import torch
 import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
-import pandas as pd
+from torch.utils.data import Dataset, DataLoader
+from torchvision import models, transforms
+from PIL import Image
+import pickle
+import os
+from sklearn.metrics import accuracy_score
+from tqdm import tqdm
 
-from ITM_Classifier_baselines import (
-    ITM_Model,
-    ITM_Dataset,
-    load_sentence_embeddings,
-    train_model,
-    evaluate_model,
-)
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {device}")
-
-# Paths for images and data files (adjust these paths as needed)
-IMAGES_PATH = "./ITM_Classifier-baselines/visual7w-images"
-train_data_file = "./ITM_Classifier-baselines/visual7w-text/v7w.TrainImages.itm.txt"
-test_data_file = "./ITM_Classifier-baselines/visual7w-text/v7w.TestImages.itm.txt"
-sentence_embeddings_file = (
-    "./ITM_Classifier-baselines/v7w.sentence_embeddings-gtr-t5-large.pkl"
-)
-
-# Load sentence embeddings
-print("READING sentence embeddings...")
-sentence_embeddings = load_sentence_embeddings(sentence_embeddings_file)
-
-# Create datasets and loaders
-print("LOADING training data")
-train_dataset = ITM_Dataset(
-    IMAGES_PATH,
-    train_data_file,
-    sentence_embeddings,
-    data_split="train",
-    train_ratio=0.2,
-)
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-
-print("LOADING test data")
-test_dataset = ITM_Dataset(
-    IMAGES_PATH, test_data_file, sentence_embeddings, data_split="test"
-)
-test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
-
-# Create model using CNN architecture
-MODEL_ARCHITECTURE = "CNN"  # or "ViT"
-USE_PRETRAINED_MODEL = True
-model = ITM_Model(
-    num_classes=2, ARCHITECTURE=MODEL_ARCHITECTURE, PRETRAINED=USE_PRETRAINED_MODEL
-).to(device)
-print("\nModel Architecture:")
-print(model)
-
-# Print trainable parameters info
-total_params = 0
-print("\nModel Trainable Parameters:")
-for name, param in model.named_parameters():
-    if param.requires_grad:
-        num_params = param.numel()
-        total_params += num_params
-        print(f"{name}: {param.data.shape} | Number of parameters: {num_params}")
-print(
-    f"\nTotal number of parameters: {total_params}\nUSE_PRETRAINED_MODEL={USE_PRETRAINED_MODEL}\n"
-)
-
-# Define loss function and optimiser
-criterion = nn.CrossEntropyLoss()
-optimiser = torch.optim.AdamW(model.parameters(), lr=3e-5, weight_decay=1e-4)
-
-# Train the model
-train_model(
-    model,
-    MODEL_ARCHITECTURE,
-    train_loader,
-    criterion,
-    optimiser,
-    num_epochs=1,
-    device=device,
-)
-
-# Evaluate the model on test data
-evaluate_model(model, MODEL_ARCHITECTURE, test_loader, criterion, device)
+# Config
+ARCHITECTURE = "ViT"  # or "CNN"
+PRETRAINED = True
+BATCH_SIZE = 32
+EPOCHS = 5
+MODEL_SAVE_PATH = "best_model.pth"
 
 
-# CSV Saving Function
-def save_predictions_csv(model, dataloader, output_file, device):
-    model.eval()
-    rows = []
-    with torch.no_grad():
-        for (
-            image,
-            question_embeddings,
-            answer_embeddings,
-            label,
-            image_id,
-            question,
-            answer,
-        ) in dataloader:
-            image = image.to(device)
-            question_embeddings = question_embeddings.to(device)
-            answer_embeddings = answer_embeddings.to(device)
-            outputs = model(image, question_embeddings, answer_embeddings)
-            _, predicted = torch.max(outputs.data, 1)
-            for i in range(len(image_id)):
-                rows.append(
-                    {
-                        "image": image_id[i],
-                        "question": question[i],
-                        "answer": answer[i],
-                        "true_label": label[i].item(),
-                        "predicted_label": predicted[i].item(),
-                    }
+class ITM_Dataset(Dataset):
+    def __init__(self, txt_file, sentence_embeddings, transform=None):
+        self.data = []
+        self.transform = transform
+        with open(txt_file, "r") as f:
+            for line in f:
+                parts = line.strip().split("\t")
+                if len(parts) < 3:
+                    continue
+                img_id, question, label = parts[0], parts[1], parts[-1]
+                self.data.append(
+                    (img_id, question, 1 if label.strip() == "match" else 0)
                 )
-    pd.DataFrame(rows).to_csv(output_file, index=False)
-    print(f"✅ Predictions saved to {output_file}")
+        self.sentence_embeddings = sentence_embeddings
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        img_id, question, label = self.data[idx]
+        img_path = f"dummy_images/{img_id}"  # not used, just placeholder
+        img = Image.new(
+            "RGB", (224, 224)
+        )  # dummy image since actual images aren't available
+
+        if self.transform:
+            img = self.transform(img)
+
+        text_embed = torch.tensor(self.sentence_embeddings[img_id + "|" + question])
+        return img, text_embed, torch.tensor(label)
 
 
-# Save predictions to CSV
-save_predictions_csv(model, test_loader, "cnn_predictions.csv", device)
+def load_sentence_embeddings(path):
+    with open(path, "rb") as f:
+        return pickle.load(f)
+
+
+class ITM_Model(nn.Module):
+    def __init__(self, ARCHITECTURE="CNN", PRETRAINED=True):
+        super(ITM_Model, self).__init__()
+        if ARCHITECTURE == "CNN":
+            self.vision = models.resnet18(pretrained=PRETRAINED)
+            self.vision.fc = nn.Identity()
+            vis_out = 512
+        else:
+            self.vision = models.vit_b_32(pretrained=PRETRAINED)
+            self.vision.heads = nn.Identity()
+            vis_out = 768
+
+        self.fc = nn.Sequential(
+            nn.Linear(vis_out + 768, 256), nn.ReLU(), nn.Linear(256, 2)
+        )
+
+    def forward(self, image, text_embed):
+        image_feat = self.vision(image)
+        combined = torch.cat((image_feat, text_embed), dim=1)
+        return self.fc(combined)
+
+
+def train_model(model, train_loader, dev_loader, criterion, optimizer, device):
+    model.train()
+    best_acc = 0
+    for epoch in range(EPOCHS):
+        total_loss = 0
+        for images, texts, labels in tqdm(train_loader, desc=f"Epoch {epoch + 1}"):
+            images, texts, labels = (
+                images.to(device),
+                texts.to(device),
+                labels.to(device),
+            )
+            optimizer.zero_grad()
+            outputs = model(images, texts)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        print(f"Epoch {epoch + 1} Loss: {total_loss / len(train_loader):.4f}")
+
+        acc = evaluate_model(model, dev_loader, device, silent=True)
+        if acc > best_acc:
+            best_acc = acc
+            torch.save(model.state_dict(), MODEL_SAVE_PATH)
+            print(f"Saved new best model with accuracy: {best_acc:.4f}")
+
+
+def evaluate_model(model, data_loader, device, silent=False):
+    model.eval()
+    all_preds, all_labels = [], []
+    with torch.no_grad():
+        for images, texts, labels in data_loader:
+            images, texts = images.to(device), texts.to(device)
+            outputs = model(images, texts)
+            preds = outputs.argmax(dim=1).cpu().numpy()
+            all_preds.extend(preds)
+            all_labels.extend(labels.numpy())
+    acc = accuracy_score(all_labels, all_preds)
+    if not silent:
+        print(f"Accuracy: {acc:.4f}")
+    return acc
+
+
+if __name__ == "__main__":
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    print("Loading embeddings...")
+    sentence_embeddings = load_sentence_embeddings(
+        "v7w.sentence_embeddings-gtr-t5-large.pkl"
+    )
+
+    transform = transforms.Compose(
+        [
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+        ]
+    )
+
+    train_dataset = ITM_Dataset(
+        "v7w.TrainImages.itm.txt", sentence_embeddings, transform
+    )
+    dev_dataset = ITM_Dataset("v7w.DevImages.itm.txt", sentence_embeddings, transform)
+    test_dataset = ITM_Dataset("v7w.TestImages.itm.txt", sentence_embeddings, transform)
+
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    dev_loader = DataLoader(dev_dataset, batch_size=BATCH_SIZE)
+    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
+
+    print("Creating model...")
+    model = ITM_Model(ARCHITECTURE, PRETRAINED).to(device)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+    print("Training...")
+    train_model(model, train_loader, dev_loader, criterion, optimizer, device)
+
+    print("Evaluating best model on Test Set:")
+    model.load_state_dict(torch.load(MODEL_SAVE_PATH))
+    evaluate_model(model, test_loader, device)

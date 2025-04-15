@@ -214,6 +214,9 @@ class ITM_Model(nn.Module):
                 self.vision_model.num_features, 128
             )  # Reduce features
 
+        elif self.ARCHITECTURE == "MLP":
+            self.img_embed = nn.Linear(3 * 224 * 224, 128)  # flatten image
+
         else:
             print("UNKNOWN neural architecture", ARCHITECTURE)
             exit(0)
@@ -225,11 +228,20 @@ class ITM_Model(nn.Module):
         )  # Concatenate vision and text features
 
     def forward(self, img, question_embedding, answer_embedding):
-        img_features = self.vision_model(img)
-        if self.ARCHITECTURE == "ViT":
-            img_features = self.fc_vit(
-                img_features
-            )  # Use the custom linear layer for ViT
+        if self.ARCHITECTURE == "CNN":
+            img_features = self.vision_model(img)
+
+        elif self.ARCHITECTURE == "ViT":
+            img_features = self.vision_model(img)
+            img_features = self.fc_vit(img_features)
+
+        elif self.ARCHITECTURE == "MLP":
+            img = img.view(img.size(0), -1)
+            img_features = self.img_embed(img)
+
+        else:
+            raise ValueError(f"Unsupported architecture: {self.ARCHITECTURE}")
+
         question_features = self.question_embedding_layer(question_embedding)
         answer_features = self.answer_embedding_layer(answer_embedding)
         combined_features = torch.cat(
@@ -300,61 +312,50 @@ def train_model(
 
 
 def evaluate_model(model, ARCHITECTURE, test_loader, criterion, device):
-    print(f"EVALUATING %s model" % (ARCHITECTURE))
+    print(f"EVALUATING {ARCHITECTURE} model")
     model.eval()
     total_test_loss = 0
     all_labels = []
     all_predictions = []
+    all_logits = []
     start_time = time.time()
 
     with torch.no_grad():
         for images, question_embeddings, answer_embeddings, labels in test_loader:
-            # Move images/text/labels to the GPU (if available)
-            images = images.to(device)
-            question_embeddings = question_embeddings.to(device)
-            answer_embeddings = answer_embeddings.to(device)
-            labels = labels.to(device)  # Labels are single integers (0 or 1)
-
-            # Perform forward pass on our data
             images = images.to(device)
             question_embeddings = question_embeddings.to(device)
             answer_embeddings = answer_embeddings.to(device)
             labels = labels.to(device)
-            outputs = model(images, question_embeddings, answer_embeddings)
 
-            # Accumulate loss on test data
+            outputs = model(images, question_embeddings, answer_embeddings)
             total_test_loss += criterion(outputs, labels)
 
-            # Since outputs are logits, apply softmax to get probabilities
-            predicted_probabilities = torch.softmax(
-                outputs, dim=1
-            )  # Use softmax for multi-class output
-            predicted_class = predicted_probabilities.argmax(
-                dim=1
-            )  # Get the predicted class index (0 or 1)
+            probs = torch.softmax(outputs, dim=1)[:, 1]  # match score
+            predicted_class = probs > 0.5
 
-            # Store labels and predictions for later analysis
+            all_logits.extend(probs.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
             all_predictions.extend(predicted_class.cpu().numpy())
 
-    # Convert to numpy arrays for easier calculations
-    all_labels = np.array(all_labels)
-    all_predictions = np.array(all_predictions)
+    # Accuracy
+    correct = (all_predictions == all_labels).sum()
+    accuracy = correct / len(all_labels)
 
-    # Calculate true positives, true negatives, false positives, false negatives
-    tp = np.sum((all_predictions == 1) & (all_labels == 1))  # True positives
-    tn = np.sum((all_predictions == 0) & (all_labels == 0))  # True negatives
-    fp = np.sum((all_predictions == 1) & (all_labels == 0))  # False positives
-    fn = np.sum((all_predictions == 0) & (all_labels == 1))  # False negatives
+    # MRR
+    reciprocal_ranks = []
+    for i in range(0, len(all_logits), 4):
+        group_logits = all_logits[i : i + 4]
+        group_labels = all_labels[i : i + 4]
+        sorted_indices = np.argsort(group_logits)[::-1]
+        for rank, idx in enumerate(sorted_indices):
+            if group_labels[idx] == 1:
+                reciprocal_ranks.append(1 / (rank + 1))
+                break
+    mrr = np.mean(reciprocal_ranks)
 
-    # Calculate sensitivity, specificity, and balanced accuracy
-    sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
-    balanced_accuracy = (sensitivity + specificity) / 2.0
-
-    elapsed_time = time.time() - start_time
-    print(f"Balanced Accuracy: {balanced_accuracy:.4f}, {elapsed_time:.2f} seconds")
-    print(f"Total Test Loss: {total_test_loss:.4f}")
+    elapsed = time.time() - start_time
+    print(f"✅ Accuracy: {accuracy:.4f} | MRR: {mrr:.4f} | Test Time: {elapsed:.2f}s")
+    return accuracy, mrr, elapsed
 
 
 # Main Execution

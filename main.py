@@ -1,4 +1,6 @@
 import argparse
+import os
+import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -13,7 +15,7 @@ from ITM_Classifier_baselines import (
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--arch", choices=["CNN", "ViT"], default="ViT")
+    parser.add_argument("--arch", choices=["CNN", "ViT", "MLP"], default="ViT")
     parser.add_argument("--pretrained", action="store_true")
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch_size", type=int, default=16)
@@ -39,9 +41,13 @@ def main():
     test_dataset = ITM_Dataset(
         "visual7w-images", "v7w.TestImages.itm.txt", sentence_embeddings, "test"
     )
+    dev_dataset = ITM_Dataset(
+        "visual7w-images", "v7w.DevImages.itm.txt", sentence_embeddings, "dev"
+    )
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size)
+    dev_loader = DataLoader(dev_dataset, batch_size=args.batch_size)
 
     print("Initializing model...")
     model = ITM_Model(num_classes=2, ARCHITECTURE=args.arch, PRETRAINED=args.pretrained)
@@ -56,8 +62,33 @@ def main():
     )
     print("Training completed.")
 
+    print("Evaluating on Dev Set...")
+    evaluate_model(model, args.arch, dev_loader, args.device)
+
     print("Evaluating model...")
-    evaluate_model(model, args.arch, test_loader, criterion, args.device)
+    acc, mrr, test_time = evaluate_model(
+        model, args.arch, test_loader, criterion, args.device
+    )
+
+    # Save results to CSV
+    csv_path = "results.csv"
+    new_result = {
+        "Model": args.arch,
+        "Accuracy": round(acc, 4),
+        "MRR": round(mrr, 4),
+        "TestTime(s)": round(test_time, 2),
+        "Notes": "Auto-logged",
+    }
+
+    # Append to CSV
+    if os.path.exists(csv_path):
+        df = pd.read_csv(csv_path)
+        df = pd.concat([df, pd.DataFrame([new_result])], ignore_index=True)
+    else:
+        df = pd.DataFrame([new_result])
+
+    df.to_csv(csv_path, index=False)
+    print(f"📊 Results logged to {csv_path}")
 
     torch.save(model.state_dict(), f"itm_model_{args.arch.lower()}.pth")
     print(f"✅ Model saved as itm_model_{args.arch.lower()}.pth")

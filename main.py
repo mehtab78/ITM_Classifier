@@ -30,14 +30,14 @@ def main():
 
     print("Preparing datasets and dataloaders...")
     train_dataset = ITM_Dataset(
-        "images",
+        "visual7w-images",
         "v7w.TrainImages.itm.txt",
         sentence_embeddings,
         "train",
         args.train_ratio,
     )
     test_dataset = ITM_Dataset(
-        "images", "v7w.TestImages.itm.txt", sentence_embeddings, "test"
+        "visual7w-images", "v7w.TestImages.itm.txt", sentence_embeddings, "test"
     )
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)

@@ -41,13 +41,9 @@ def main():
     test_dataset = ITM_Dataset(
         "visual7w-images", "v7w.TestImages.itm.txt", sentence_embeddings, "test"
     )
-    dev_dataset = ITM_Dataset(
-        "visual7w-images", "v7w.DevImages.itm.txt", sentence_embeddings, "dev"
-    )
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size)
-    dev_loader = DataLoader(dev_dataset, batch_size=args.batch_size)
 
     print("Initializing model...")
     model = ITM_Model(num_classes=2, ARCHITECTURE=args.arch, PRETRAINED=args.pretrained)
@@ -61,9 +57,6 @@ def main():
         model, args.arch, train_loader, criterion, optimiser, args.epochs, args.device
     )
     print("Training completed.")
-
-    print("Evaluating on Dev Set...")
-    evaluate_model(model, args.arch, dev_loader, args.device)
 
     print("Evaluating model...")
     acc, mrr, test_time = evaluate_model(

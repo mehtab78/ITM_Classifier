@@ -338,7 +338,7 @@ def evaluate_model(model, ARCHITECTURE, test_loader, criterion, device):
             all_predictions.extend(predicted_class.cpu().numpy())
 
     # Accuracy
-    correct = (all_predictions == all_labels).sum()
+    correct = np.sum(np.array(all_predictions) == np.array(all_labels))
     accuracy = correct / len(all_labels)
 
     # MRR

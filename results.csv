@@ -1,0 +1,4 @@
+Model,Accuracy,MRR,TestTime(s),Notes
+MLP,0.8048,0.7807,6.67,Auto-logged
+CNN,0.8043,0.7847,58.82,Auto-logged
+ViT,0.802,0.7832,110.5,Auto-logged

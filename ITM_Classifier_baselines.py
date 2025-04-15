@@ -239,7 +239,15 @@ class ITM_Model(nn.Module):
         return output
 
 
-def train_model(model, ARCHITECTURE, train_loader, criterion, optimiser, num_epochs=10):
+def train_model(
+    model,
+    ARCHITECTURE,
+    train_loader,
+    criterion,
+    optimiser,
+    num_epochs=10,
+    device="cuda",
+):
     print(f"TRAINING %s model" % (ARCHITECTURE))
     model.train()
 
@@ -408,6 +416,12 @@ if __name__ == "__main__":
 
     # Train and evaluate the model
     train_model(
-        model, MODEL_ARCHITECTURE, train_loader, criterion, optimiser, num_epochs=10
+        model,
+        MODEL_ARCHITECTURE,
+        train_loader,
+        criterion,
+        optimiser,
+        num_epochs=10,
+        device=device,
     )
     evaluate_model(model, MODEL_ARCHITECTURE, test_loader, device)

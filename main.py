@@ -51,10 +51,16 @@ def main():
     optimiser = torch.optim.AdamW(model.parameters(), lr=3e-5, weight_decay=1e-4)
 
     print("Starting training...")
-    train_model(model, args.arch, train_loader, criterion, optimiser, args.epochs)
+    train_model(
+        model, args.arch, train_loader, criterion, optimiser, args.epochs, args.device
+    )
+    print("Training completed.")
 
     print("Evaluating model...")
     evaluate_model(model, args.arch, test_loader, args.device)
+
+    torch.save(model.state_dict(), f"itm_model_{args.arch.lower()}.pth")
+    print(f"✅ Model saved as itm_model_{args.arch.lower()}.pth")
 
 
 if __name__ == "__main__":

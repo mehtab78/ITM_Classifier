@@ -239,9 +239,7 @@ class ITM_Model(nn.Module):
         return output
 
 
-def train_model(
-    model, ARCHITECTURE, train_loader, criterion, optimiser, num_epochs=10, device=None
-):
+def train_model(model, ARCHITECTURE, train_loader, criterion, optimiser, num_epochs=10):
     print(f"TRAINING %s model" % (ARCHITECTURE))
     model.train()
 
@@ -264,6 +262,10 @@ def train_model(
             labels = labels.to(device)
 
             # Forward pass -- given input data to the model
+            images = images.to(device)
+            question_embeddings = question_embeddings.to(device)
+            answer_embeddings = answer_embeddings.to(device)
+            labels = labels.to(device)
             outputs = model(images, question_embeddings, answer_embeddings)
 
             # Calculate loss (error)
@@ -306,6 +308,10 @@ def evaluate_model(model, ARCHITECTURE, test_loader, device):
             labels = labels.to(device)  # Labels are single integers (0 or 1)
 
             # Perform forward pass on our data
+            images = images.to(device)
+            question_embeddings = question_embeddings.to(device)
+            answer_embeddings = answer_embeddings.to(device)
+            labels = labels.to(device)
             outputs = model(images, question_embeddings, answer_embeddings)
 
             # Accumulate loss on test data

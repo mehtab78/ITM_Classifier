@@ -51,9 +51,7 @@ def main():
     optimiser = torch.optim.AdamW(model.parameters(), lr=3e-5, weight_decay=1e-4)
 
     print("Starting training...")
-    train_model(
-        model, args.arch, train_loader, criterion, optimiser, args.epochs, args.device
-    )
+    train_model(model, args.arch, train_loader, criterion, optimiser, args.epochs)
 
     print("Evaluating model...")
     evaluate_model(model, args.arch, test_loader, args.device)

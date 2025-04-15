@@ -57,7 +57,7 @@ def main():
     print("Training completed.")
 
     print("Evaluating model...")
-    evaluate_model(model, args.arch, test_loader, args.device)
+    evaluate_model(model, args.arch, test_loader, criterion, args.device)
 
     torch.save(model.state_dict(), f"itm_model_{args.arch.lower()}.pth")
     print(f"✅ Model saved as itm_model_{args.arch.lower()}.pth")

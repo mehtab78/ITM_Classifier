@@ -299,7 +299,7 @@ def train_model(
         )
 
 
-def evaluate_model(model, ARCHITECTURE, test_loader, device):
+def evaluate_model(model, ARCHITECTURE, test_loader, criterion, device):
     print(f"EVALUATING %s model" % (ARCHITECTURE))
     model.eval()
     total_test_loss = 0
@@ -419,9 +419,9 @@ if __name__ == "__main__":
         model,
         MODEL_ARCHITECTURE,
         train_loader,
-        criterion,
-        optimiser,
+        criterion=criterion,
+        optimiser=optimiser,
         num_epochs=10,
         device=device,
     )
-    evaluate_model(model, MODEL_ARCHITECTURE, test_loader, device)
+    evaluate_model(model, MODEL_ARCHITECTURE, test_loader, criterion, device)

@@ -365,12 +365,12 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # Paths and files
-    IMAGES_PATH = "./ITM_Classifier_baselines/visual7w-images"
-    train_data_file = "./ITM_Classifier_baselines/visual7w-text/v7w.TrainImages.itm.txt"
-    dev_data_file = "./ITM_Classifier_baselines/visual7w-text//v7w.DevImages.itm.txt"
-    test_data_file = "./ITM_Classifier_baselines/visual7w-text//v7w.TestImages.itm.txt"
+    IMAGES_PATH = "/ITM_Classifier_baselines/visual7w-images"
+    train_data_file = "/ITM_Classifier_baselines/visual7w-text/v7w.TrainImages.itm.txt"
+    dev_data_file = "/ITM_Classifier_baselines/visual7w-text/v7w.DevImages.itm.txt"
+    test_data_file = "/ITM_Classifier_baselines/visual7w-text/v7w.TestImages.itm.txt"
     sentence_embeddings_file = (
-        "./ITM_Classifier_baselines/v7w.sentence_embeddings-gtr-t5-large.pkl"
+        "/ITM_Classifier_baselines/v7w.sentence_embeddings-gtr-t5-large.pkl"
     )
     sentence_embeddings = load_sentence_embeddings(sentence_embeddings_file)
 
